@@ -11,8 +11,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # === ENVIRONMENT ===
+print("✅ DEBUG | Loading environment variables...")
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+print("✅ DEBUG | TELEGRAM_BOT_TOKEN:", TOKEN)
+print("✅ DEBUG | TELEGRAM_CHAT_ID:", CHAT_ID)
+
 COINS = ["bitcoin", "ethereum", "solana", "binancecoin"]
 VS_CURRENCY = "usd"
 INTERVAL = "1h"
@@ -24,6 +28,7 @@ if not TOKEN:
 if not CHAT_ID:
     raise Exception("❌ TELEGRAM_CHAT_ID not set!")
 
+print("✅ DEBUG | Initializing Telegram bot...")
 bot = telebot.TeleBot(TOKEN)
 
 # === FLASK SETUP ===
@@ -55,9 +60,11 @@ def calculate_macd(prices, short=12, long=26, signal=9):
 
 def fetch_prices(coin):
     try:
+        print(f"📡 DEBUG | Fetching prices for {coin}")
         url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart?vs_currency={VS_CURRENCY}&days=2&interval={INTERVAL}"
         data = requests.get(url).json()
         prices = [point[1] for point in data["prices"]]
+        print(f"✅ DEBUG | Fetched {len(prices)} prices for {coin}")
         return prices
     except Exception as e:
         print(f"⚠️ Error fetching {coin}:", e)
@@ -66,6 +73,8 @@ def fetch_prices(coin):
 def get_signal(prices):
     rsi = calculate_rsi(prices)
     macd, signal, hist = calculate_macd(prices)
+
+    print(f"📊 DEBUG | RSI: {rsi:.2f}, MACD: {macd:.2f}, Signal: {signal:.2f}, Hist: {hist:.2f}")
 
     if rsi < 30 and macd > signal and hist > 0:
         return "📈 STRONG BUY"
@@ -86,6 +95,7 @@ def send_signal(coin, price, signal):
         f"⏱️ *Time:* {now}"
     )
     try:
+        print(f"📨 DEBUG | Sending signal for {coin}: {signal}")
         bot.send_message(CHAT_ID, msg, parse_mode="Markdown")
     except Exception as e:
         print("Telegram Error:", e)
@@ -97,6 +107,7 @@ def signal_loop():
             for coin in COINS:
                 prices = fetch_prices(coin)
                 if len(prices) < 30:
+                    print(f"⚠️ Not enough data for {coin}, skipping.")
                     continue
 
                 signal = get_signal(prices)
@@ -111,6 +122,7 @@ def signal_loop():
 
 # === BACKGROUND THREAD FOR LOOP ===
 def start_bot_loop():
+    print("🚀 DEBUG | Starting signal loop thread...")
     t = threading.Thread(target=signal_loop)
     t.daemon = True
     t.start()
@@ -118,4 +130,5 @@ def start_bot_loop():
 # === START EVERYTHING ===
 if __name__ == "__main__":
     start_bot_loop()
+    print("🌐 DEBUG | Running Flask server...")
     app.run(host="0.0.0.0", port=10000)
