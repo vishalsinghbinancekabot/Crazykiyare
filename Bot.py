@@ -2,14 +2,15 @@ import requests
 import time
 import numpy as np
 import telebot
+import os  # ← ADD THIS
 
 # ==== CONFIGURATION ====
-COINS = ['bitcoin', 'ethereum', 'solana', 'binancecoin']  # Add more coins if needed
+COINS = ['bitcoin', 'ethereum', 'solana', 'binancecoin']
 VS_CURRENCY = 'usd'
 API_URL = 'https://api.coingecko.com/api/v3/coins/'
-TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'
-TELEGRAM_USER_ID = 'YOUR_TELEGRAM_USER_ID'  # use your ID or group ID
-CHECK_INTERVAL = 300  # in seconds (5 minutes)
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")  # ✅ Use env variable
+TELEGRAM_USER_ID = os.environ.get("TELEGRAM_USER_ID")      # ✅ Use env variable
+CHECK_INTERVAL = 300  # in seconds
 
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
