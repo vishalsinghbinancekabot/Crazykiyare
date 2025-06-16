@@ -1,65 +1,103 @@
-import requests
+import os
 import time
+import requests
+import datetime
 import numpy as np
 import telebot
-import os
-from flask import Flask
-import threading
+from dotenv import load_dotenv
 
-# ==== ENVIRONMENT VARIABLES ====
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_USER_ID = os.getenv("TELEGRAM_USER_ID")  # string
+# Load .env file if exists
+load_dotenv()
 
-# ==== CONFIGURATION ====
-COINS = ['bitcoin', 'ethereum', 'solana', 'binancecoin']
-VS_CURRENCY = 'usd'
-API_URL = 'https://api.coingecko.com/api/v3/coins/'
-CHECK_INTERVAL = 300  # 5 minutes
+# === CONFIGURATION ===
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+COINS = ["bitcoin", "ethereum", "solana", "binancecoin"]
+VS_CURRENCY = "usd"
+INTERVAL = "1h"
+LOOP_MINUTES = 10
 
-bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
+# === VALIDATION ===
+if not TOKEN:
+    raise Exception("❌ TELEGRAM_BOT_TOKEN not set!")
+if not CHAT_ID:
+    raise Exception("❌ TELEGRAM_CHAT_ID not set!")
 
-# ==== FLASK KEEP-ALIVE ====
-app = Flask(__name__)
+bot = telebot.TeleBot(TOKEN)
 
-@app.route('/')
-def home():
-    return "🤖 Bot is running!"
+# === STRATEGIES ===
+def calculate_rsi(prices, period=14):
+    prices = np.array(prices)
+    deltas = np.diff(prices)
+    gain = np.where(deltas > 0, deltas, 0)
+    loss = np.where(deltas < 0, -deltas, 0)
+    avg_gain = np.convolve(gain, np.ones(period)/period, mode='valid')
+    avg_loss = np.convolve(loss, np.ones(period)/period, mode='valid')
+    rs = avg_gain / (avg_loss + 1e-10)
+    rsi = 100 - (100 / (1 + rs))
+    return rsi[-1] if len(rsi) else 50
 
-def run_flask():
-    app.run(host='0.0.0.0', port=10000)
+def calculate_macd(prices, short=12, long=26, signal=9):
+    short_ema = np.convolve(prices, np.ones(short)/short, mode='valid')
+    long_ema = np.convolve(prices, np.ones(long)/long, mode='valid')
+    macd_line = short_ema[-len(long_ema):] - long_ema
+    signal_line = np.convolve(macd_line, np.ones(signal)/signal, mode='valid')
+    histogram = macd_line[-len(signal_line):] - signal_line
+    return macd_line[-1], signal_line[-1], histogram[-1]
 
-threading.Thread(target=run_flask).start()
+def fetch_prices(coin):
+    url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart?vs_currency={VS_CURRENCY}&days=2&interval={INTERVAL}"
+    try:
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        prices = [point[1] for point in data["prices"]]
+        return prices
+    except Exception as e:
+        print(f"⚠️ Error fetching {coin} prices:", e)
+        return []
 
-# ==== SIGNAL STRATEGY ====
-def get_price_data(coin_id, days=2, interval='hourly'):
-    url = f'{API_URL}{coin_id}/market_chart?vs_currency={VS_CURRENCY}&days={days}&interval={interval}'
-    response = requests.get(url)
-    data = response.json()
-    prices = [p[1] for p in data['prices']]
-    return prices
+def get_signal(prices):
+    rsi = calculate_rsi(prices)
+    macd, signal, hist = calculate_macd(prices)
 
-def analyze_trend(prices):
-    short_avg = np.mean(prices[-3:])
-    long_avg = np.mean(prices[-12:])
-    if short_avg > long_avg * 1.01:
-        return 'BUY'
-    elif short_avg < long_avg * 0.99:
-        return 'SELL'
+    if rsi < 30 and macd > signal and hist > 0:
+        return "📈 STRONG BUY"
+    elif rsi > 70 and macd < signal and hist < 0:
+        return "📉 STRONG SELL"
+    elif 45 < rsi < 55:
+        return "🔁 HOLD"
     else:
-        return 'HOLD'
+        return "🤔 NEUTRAL"
 
-def check_and_send_signals():
+def send_signal(coin, price, signal):
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    msg = (
+        f"🔔 *Signal Alert*\n"
+        f"🪙 *Coin:* {coin.upper()}\n"
+        f"💰 *Price:* ${price:.2f}\n"
+        f"📊 *Signal:* {signal}\n"
+        f"⏱️ *Time:* {now}"
+    )
+    try:
+        bot.send_message(CHAT_ID, msg, parse_mode="Markdown")
+    except Exception as e:
+        print("Telegram Error:", e)
+
+# === MAIN LOOP ===
+def main():
     while True:
         for coin in COINS:
-            try:
-                prices = get_price_data(coin)
-                signal = analyze_trend(prices)
-                message = f"📊 {coin.upper()} Signal: {signal}"
-                bot.send_message(chat_id=TELEGRAM_USER_ID, text=message)
-                time.sleep(5)
-            except Exception as e:
-                print(f"Error for {coin}: {e}")
-        time.sleep(CHECK_INTERVAL)
+            prices = fetch_prices(coin)
+            if len(prices) < 30:
+                continue
 
-# ==== START BOT ====
-threading.Thread(target=check_and_send_signals).start()
+            signal = get_signal(prices)
+            current_price = prices[-1]
+            send_signal(coin, current_price, signal)
+            print(f"✅ Sent signal for {coin}")
+
+        print(f"🔁 Waiting {LOOP_MINUTES} minutes...\n")
+        time.sleep(LOOP_MINUTES * 60)
+
+if __name__ == "__main__":
+    main()
