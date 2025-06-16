@@ -80,3 +80,18 @@ def run_bot():
 # ==== START ====
 if __name__ == "__main__":
     run_bot()
+# Add at bottom of Bot.py
+from flask import Flask
+import threading
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🤖 Bot is running!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=10000)
+
+# Run Flask in background
+threading.Thread(target=run_flask).start()
