@@ -1,15 +1,16 @@
 import os
 import time
+import threading
 import requests
 import datetime
 import numpy as np
+from flask import Flask
 import telebot
 from dotenv import load_dotenv
 
-# Load .env file if exists
 load_dotenv()
 
-# === CONFIGURATION ===
+# === ENVIRONMENT ===
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 COINS = ["bitcoin", "ethereum", "solana", "binancecoin"]
@@ -24,6 +25,13 @@ if not CHAT_ID:
     raise Exception("❌ TELEGRAM_CHAT_ID not set!")
 
 bot = telebot.TeleBot(TOKEN)
+
+# === FLASK SETUP ===
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "✅ Crypto Signal Bot Running!"
 
 # === STRATEGIES ===
 def calculate_rsi(prices, period=14):
@@ -46,14 +54,13 @@ def calculate_macd(prices, short=12, long=26, signal=9):
     return macd_line[-1], signal_line[-1], histogram[-1]
 
 def fetch_prices(coin):
-    url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart?vs_currency={VS_CURRENCY}&days=2&interval={INTERVAL}"
     try:
-        response = requests.get(url, timeout=10)
-        data = response.json()
+        url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart?vs_currency={VS_CURRENCY}&days=2&interval={INTERVAL}"
+        data = requests.get(url).json()
         prices = [point[1] for point in data["prices"]]
         return prices
     except Exception as e:
-        print(f"⚠️ Error fetching {coin} prices:", e)
+        print(f"⚠️ Error fetching {coin}:", e)
         return []
 
 def get_signal(prices):
@@ -83,21 +90,32 @@ def send_signal(coin, price, signal):
     except Exception as e:
         print("Telegram Error:", e)
 
-# === MAIN LOOP ===
-def main():
+# === AUTO LOOP FUNCTION ===
+def signal_loop():
     while True:
-        for coin in COINS:
-            prices = fetch_prices(coin)
-            if len(prices) < 30:
-                continue
+        try:
+            for coin in COINS:
+                prices = fetch_prices(coin)
+                if len(prices) < 30:
+                    continue
 
-            signal = get_signal(prices)
-            current_price = prices[-1]
-            send_signal(coin, current_price, signal)
-            print(f"✅ Sent signal for {coin}")
+                signal = get_signal(prices)
+                current_price = prices[-1]
+                send_signal(coin, current_price, signal)
+                print(f"✅ {coin} signal sent: {signal}")
+        except Exception as e:
+            print("⚠️ Error in loop:", e)
 
-        print(f"🔁 Waiting {LOOP_MINUTES} minutes...\n")
+        print(f"⏳ Sleeping {LOOP_MINUTES} mins...\n")
         time.sleep(LOOP_MINUTES * 60)
 
+# === BACKGROUND THREAD FOR LOOP ===
+def start_bot_loop():
+    t = threading.Thread(target=signal_loop)
+    t.daemon = True
+    t.start()
+
+# === START EVERYTHING ===
 if __name__ == "__main__":
-    main()
+    start_bot_loop()
+    app.run(host="0.0.0.0", port=10000)
