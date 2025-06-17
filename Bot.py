@@ -143,4 +143,5 @@ start_bot_loop()
 
 if __name__ == "__main__":
     bot.send_message(CHAT_ID, "🚀 Bot Successfully Deployed!")
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))
+app.run(host="0.0.0.0", port=port)
