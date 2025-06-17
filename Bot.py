@@ -142,7 +142,7 @@ def signal_loop():
 from flask import Flask
 import threading
 
-app = Flask(__name__)  # ✅ Yeh line zaroori hai
+app = Flask(__name__)  # Make sure this is at the top
 
 def start_bot_loop():
     print("🚀 DEBUG | Starting signal loop thread...")
@@ -154,10 +154,9 @@ def start_bot_loop():
 def home():
     return "✅ Crypto Signal Bot Running!"
 
-@app.before_first_request
-def activate_job():
-    print("🚀 Triggering signal loop from Flask startup...")
-    start_bot_loop()
+# ✅ Start signal loop directly before running Flask
+print("🚀 Triggering signal loop before Flask startup...")
+start_bot_loop()
 
 if __name__ == "__main__":
     print("🌐 DEBUG | Running Flask server...")
