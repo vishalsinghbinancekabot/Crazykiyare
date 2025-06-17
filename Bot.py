@@ -144,13 +144,17 @@ def start_bot_loop():
     t = threading.Thread(target=signal_loop)
     t.daemon = True
     t.start()
+    
+@app.route('/')
+def home():
+    return "✅ Crypto Signal Bot Running!"
 
-# === START EVERYTHING ===
+@app.before_first_request
+def activate_job():
+    print("🚀 Triggering signal loop from Flask startup...")
+    start_bot_loop()
+
 if __name__ == "__main__":
-    start_bot_loop()
     print("🌐 DEBUG | Running Flask server...")
-    bot.send_message(CHAT_ID, "🚀 Bot Successfully Deployed!")  # ✅ Correctly placed & fixed
-    app.run(host="0.0.0.0", port=10000)
-    start_bot_loop()
-    print("🌐 DEBUG | Running Flask server...")
+    bot.send_message(CHAT_ID, "🚀 Bot Successfully Deployed!")
     app.run(host="0.0.0.0", port=10000)
