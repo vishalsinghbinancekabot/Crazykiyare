@@ -64,7 +64,7 @@ def calculate_macd(prices, short=12, long=26, signal=9):
 def fetch_prices(coin):
     try:
         print(f"📡 DEBUG | Fetching prices for {coin}")
-        url = f"https://openapi.coinstats.app/v1/charts?period=7d&coinId={coin}"
+        url = f"https://openapiv1.coinstats.app/coins/{coin}/charts?period=7d"
 
         headers = {
             "accept": "application/json",
