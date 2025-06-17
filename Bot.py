@@ -10,27 +10,34 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# === ENVIRONMENT ===
+# === ENVIRONMENT VARIABLES ===
+print("✅ Loading environment variables...")
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-COINS = ["bitcoin", "ethereum", "solana", "binancecoin"]
-LOOP_MINUTES = 10
-
-# === VALIDATION ===
 if not TOKEN:
     raise Exception("❌ TELEGRAM_BOT_TOKEN not set!")
 if not CHAT_ID:
     raise Exception("❌ TELEGRAM_CHAT_ID not set!")
 
+print("✅ TELEGRAM_BOT_TOKEN:", TOKEN)
+print("✅ TELEGRAM_CHAT_ID:", CHAT_ID)
+
 bot = telebot.TeleBot(TOKEN)
+
+# === CONFIGURATION ===
+COINS = ["bitcoin", "ethereum", "solana", "binancecoin"]
+VS_CURRENCY = "usd"
+LOOP_MINUTES = 10
+
+# === FLASK SERVER ===
 app = Flask(__name__)
 
 @app.route('/')
 def home():
     return "✅ Crypto Signal Bot Running!"
 
-# === STRATEGIES ===
+# === INDICATOR FUNCTIONS ===
 def calculate_rsi(prices, period=14):
     prices = np.array(prices)
     deltas = np.diff(prices)
@@ -50,35 +57,46 @@ def calculate_macd(prices, short=12, long=26, signal=9):
     histogram = macd_line[-len(signal_line):] - signal_line
     return macd_line[-1], signal_line[-1], histogram[-1]
 
+# === DATA FETCHING ===
 def fetch_prices(coin):
     try:
+        print(f"📡 Fetching prices for {coin}")
         url = f"https://api.coinstats.app/public/v1/charts?period=30d&coinId={coin}"
+
         response = requests.get(url)
+        print("📄 Status Code:", response.status_code)
+        print("📄 Response Preview:", response.text[:200])
+
         if response.status_code != 200:
             print(f"❌ API Error for {coin}: {response.status_code}")
             return []
+
         data = response.json()
-        prices = [point[1] for point in data["chart"]]
-        print(f"✅ {coin} | Fetched {len(prices)} prices.")
+        prices = [point[1] for point in data["chart"]]  # ✅ Corrected key
+        print(f"✅ Got {len(prices)} prices for {coin}")
         return prices
+
     except Exception as e:
         print(f"⚠️ Error fetching {coin}:", e)
         return []
 
+# === SIGNAL STRATEGY ===
 def get_signal(prices):
     rsi = calculate_rsi(prices)
-    macd, signal_line, hist = calculate_macd(prices)
-    print(f"📊 RSI: {rsi:.2f}, MACD: {macd:.2f}, Signal: {signal_line:.2f}, Hist: {hist:.2f}")
+    macd, sig, hist = calculate_macd(prices)
 
-    if rsi < 30 and macd > signal_line and hist > 0:
+    print(f"📊 RSI: {rsi:.2f}, MACD: {macd:.2f}, Signal: {sig:.2f}, Hist: {hist:.2f}")
+
+    if rsi < 30 and macd > sig and hist > 0:
         return "📈 STRONG BUY"
-    elif rsi > 70 and macd < signal_line and hist < 0:
+    elif rsi > 70 and macd < sig and hist < 0:
         return "📉 STRONG SELL"
     elif 45 < rsi < 55:
         return "🔁 HOLD"
     else:
         return "🤔 NEUTRAL"
 
+# === TELEGRAM ALERT ===
 def send_signal(coin, price, signal):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     msg = (
@@ -90,11 +108,11 @@ def send_signal(coin, price, signal):
     )
     try:
         bot.send_message(CHAT_ID, msg, parse_mode="Markdown")
-        print(f"✅ {coin} | Signal Sent: {signal}")
+        print(f"✅ Signal sent: {coin} => {signal}")
     except Exception as e:
         print("Telegram Error:", e)
 
-# === LOOP ===
+# === MAIN LOOP ===
 def signal_loop():
     while True:
         try:
@@ -103,21 +121,24 @@ def signal_loop():
                 if len(prices) < 30:
                     print(f"⚠️ {coin} | Not enough data.")
                     continue
+
                 signal = get_signal(prices)
-                send_signal(coin, prices[-1], signal)
+                current_price = prices[-1]
+                send_signal(coin, current_price, signal)
         except Exception as e:
             print("⚠️ Error in loop:", e)
+
         print(f"⏳ Sleeping {LOOP_MINUTES} mins...\n")
         time.sleep(LOOP_MINUTES * 60)
 
-# === THREADING ===
+# === START LOOP IN BACKGROUND ===
 def start_bot_loop():
     print("🚀 Starting signal loop thread...")
     t = threading.Thread(target=signal_loop)
     t.daemon = True
     t.start()
 
-# === INIT ===
+# === RUN ===
 start_bot_loop()
 
 if __name__ == "__main__":
