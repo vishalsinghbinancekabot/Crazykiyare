@@ -131,5 +131,8 @@ def start_bot_loop():
 if __name__ == "__main__":
     start_bot_loop()
     print("🌐 DEBUG | Running Flask server...")
+    bot.send_message(CHAT_ID, "🚀 Bot Successfully Deployed!")  # ✅ Correctly placed & fixed
     app.run(host="0.0.0.0", port=10000)
-bot.send_message(CHAT_ID, "🚀 Bot Successfully Deployed!")
+    start_bot_loop()
+    print("🌐 DEBUG | Running Flask server...")
+    app.run(host="0.0.0.0", port=10000)
