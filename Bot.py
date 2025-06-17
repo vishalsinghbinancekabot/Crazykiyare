@@ -53,7 +53,12 @@ def fetch_prices(coin):
     try:
         print(f"📡 Fetching prices for {coin}")
         url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart?vs_currency=usd&days=7&interval=hourly"
-        response = requests.get(url)
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+
+        response = requests.get(url, headers=headers)
 
         if response.status_code != 200:
             print(f"❌ API Error for {coin}: {response.status_code}")
