@@ -1,34 +1,30 @@
 import os
 import time
 import threading
-import datetime
 import requests
+import datetime
 import numpy as np
 from flask import Flask
 import telebot
 from dotenv import load_dotenv
 
-# Load environment variables
+# === Load Environment ===
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-COINS = ["bitcoin", "ethereum", "solana", "binancecoin"]
-VS_CURRENCY = "usd"
-LOOP_MINUTES = 10
-
-# Validations
+# === Validation ===
 if not TOKEN or not CHAT_ID:
-    raise Exception("❌ Telegram token or chat ID not set!")
+    raise Exception("❌ TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing in environment variables.")
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return "✅ Crypto Signal Bot Running with CoinGecko"
+# === Settings ===
+COINS = ["bitcoin", "ethereum", "solana", "binancecoin"]
+LOOP_MINUTES = 10
 
-# ====== RSI & MACD Calculation =======
+# === Indicator Functions ===
 def calculate_rsi(prices, period=14):
     prices = np.array(prices)
     deltas = np.diff(prices)
@@ -48,17 +44,12 @@ def calculate_macd(prices, short=12, long=26, signal=9):
     histogram = macd_line[-len(signal_line):] - signal_line
     return macd_line[-1], signal_line[-1], histogram[-1]
 
-# ====== Fetch Prices from CoinGecko =======
+# === Fetch prices from CoinGecko ===
 def fetch_prices(coin):
     try:
         print(f"📡 Fetching prices for {coin}")
         url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart?vs_currency=usd&days=7&interval=hourly"
-        
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
-
-        response = requests.get(url, headers=headers)
+        response = requests.get(url)
 
         if response.status_code != 200:
             print(f"❌ API Error for {coin}: {response.status_code}")
@@ -73,68 +64,66 @@ def fetch_prices(coin):
         print(f"⚠️ Error fetching {coin}:", e)
         return []
 
-# ====== Signal Generation =======
+# === Generate signal ===
 def get_signal(prices):
     rsi = calculate_rsi(prices)
-    macd, signal, hist = calculate_macd(prices)
-    print(f"📊 RSI: {rsi:.2f}, MACD: {macd:.2f}, Signal: {signal:.2f}, Hist: {hist:.2f}")
+    macd, signal_line, hist = calculate_macd(prices)
 
-    if rsi < 30 and macd > signal and hist > 0:
+    print(f"📊 RSI: {rsi:.2f}, MACD: {macd:.2f}, Signal: {signal_line:.2f}, Hist: {hist:.2f}")
+
+    if rsi < 30 and macd > signal_line and hist > 0:
         return "📈 STRONG BUY"
-    elif rsi > 70 and macd < signal and hist < 0:
+    elif rsi > 70 and macd < signal_line and hist < 0:
         return "📉 STRONG SELL"
     elif 45 < rsi < 55:
         return "🔁 HOLD"
     else:
         return "🤔 NEUTRAL"
 
-# ====== Send Telegram Message =======
+# === Send to Telegram ===
 def send_signal(coin, price, signal):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     msg = (
-        f"🔔 *Signal Alert*\n"
+        f"🔔 *Crypto Signal Alert*\n"
         f"🪙 *Coin:* {coin.upper()}\n"
         f"💰 *Price:* ${price:.2f}\n"
         f"📊 *Signal:* {signal}\n"
         f"⏱️ *Time:* {now}"
     )
     try:
-        print(f"📨 Sending signal for {coin}: {signal}")
         bot.send_message(CHAT_ID, msg, parse_mode="Markdown")
+        print(f"📨 Sent signal for {coin}: {signal}")
     except Exception as e:
-        print("Telegram Error:", e)
+        print("❌ Telegram Error:", e)
 
-# ====== Auto Loop =======
+# === Looping Signal Check ===
 def signal_loop():
     while True:
-        try:
-            for coin in COINS:
-                prices = fetch_prices(coin)
-                if len(prices) < 30:
-                    print(f"⚠️ Not enough data for {coin}, skipping.")
-                    continue
-
-                signal = get_signal(prices)
-                current_price = prices[-1]
-                send_signal(coin, current_price, signal)
-                print(f"✅ {coin} signal sent: {signal}")
-        except Exception as e:
-            print("⚠️ Error in loop:", e)
-
+        for coin in COINS:
+            prices = fetch_prices(coin)
+            if len(prices) < 30:
+                print(f"⚠️ Not enough data for {coin}, skipping.")
+                continue
+            signal = get_signal(prices)
+            current_price = prices[-1]
+            send_signal(coin, current_price, signal)
         print(f"⏳ Sleeping {LOOP_MINUTES} mins...\n")
         time.sleep(LOOP_MINUTES * 60)
 
-# ====== Start Loop in Thread =======
+# === Flask and Threading ===
+@app.route('/')
+def home():
+    return "✅ Crypto Signal Bot Running via CoinGecko!"
+
 def start_bot_loop():
-    print("🚀 Starting signal loop thread...")
+    print("🚀 Starting signal loop...")
     t = threading.Thread(target=signal_loop)
     t.daemon = True
     t.start()
 
-# ====== Start Everything =======
 start_bot_loop()
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    bot.send_message(CHAT_ID, "🚀 CoinGecko Bot Successfully Deployed!")
-    app.run(host="0.0.0.0", port=port)
+    print("🌐 Starting Flask app...")
+    bot.send_message(CHAT_ID, "🤖 Crypto Signal Bot Deployed Successfully using CoinGecko!")
+    app.run(host="0.0.0.0", port=10000)
