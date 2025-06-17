@@ -65,7 +65,7 @@ def fetch_prices(coin):
 
         headers = {
             "accept": "application/json",
-            "X-API-KEY": os.getenv("COINSTATS_API_KEY")
+            "X-API-KEY": COINSTATS_API_KEY
         }
 
         response = requests.get(url, headers=headers)
