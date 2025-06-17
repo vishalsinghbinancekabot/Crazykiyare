@@ -11,18 +11,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # === ENVIRONMENT ===
-print("✅ DEBUG | Loading environment variables...")
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-COINSTATS_API_KEY = os.getenv("COINSTATS_API_KEY")  # NEW LINE
-
-print("✅ DEBUG | TELEGRAM_BOT_TOKEN:", TOKEN)
-print("✅ DEBUG | TELEGRAM_CHAT_ID:", CHAT_ID)
-print("✅ DEBUG | COINSTATS_API_KEY:", COINSTATS_API_KEY)
 
 COINS = ["bitcoin", "ethereum", "solana", "binancecoin"]
-VS_CURRENCY = "usd"
-INTERVAL = "1h"
 LOOP_MINUTES = 10
 
 # === VALIDATION ===
@@ -31,10 +23,7 @@ if not TOKEN:
 if not CHAT_ID:
     raise Exception("❌ TELEGRAM_CHAT_ID not set!")
 
-print("✅ DEBUG | Initializing Telegram bot...")
 bot = telebot.TeleBot(TOKEN)
-
-# === FLASK SETUP ===
 app = Flask(__name__)
 
 @app.route('/')
@@ -63,40 +52,27 @@ def calculate_macd(prices, short=12, long=26, signal=9):
 
 def fetch_prices(coin):
     try:
-        print(f"📡 DEBUG | Fetching prices for {coin}")
-        url = f"https://openapiv1.coinstats.app/coins/{coin}/charts?period=7d"
-
-        headers = {
-            "accept": "application/json",
-            "X-API-KEY": COINSTATS_API_KEY
-        }
-
-        response = requests.get(url, headers=headers)
-        print("📄 DEBUG | Status Code:", response.status_code)
-        print("📄 DEBUG | Response Text (first 200):", response.text[:200])
-
+        url = f"https://api.coinstats.app/public/v1/charts?period=30d&coinId={coin}"
+        response = requests.get(url)
         if response.status_code != 200:
             print(f"❌ API Error for {coin}: {response.status_code}")
             return []
-
         data = response.json()
-        prices = [point[1] for point in data["data"]["chart"]]
-        print(f"✅ DEBUG | Fetched {len(prices)} prices for {coin}")
+        prices = [point[1] for point in data["chart"]]
+        print(f"✅ {coin} | Fetched {len(prices)} prices.")
         return prices
-
     except Exception as e:
         print(f"⚠️ Error fetching {coin}:", e)
         return []
-        
+
 def get_signal(prices):
     rsi = calculate_rsi(prices)
-    macd, signal, hist = calculate_macd(prices)
+    macd, signal_line, hist = calculate_macd(prices)
+    print(f"📊 RSI: {rsi:.2f}, MACD: {macd:.2f}, Signal: {signal_line:.2f}, Hist: {hist:.2f}")
 
-    print(f"📊 DEBUG | RSI: {rsi:.2f}, MACD: {macd:.2f}, Signal: {signal:.2f}, Hist: {hist:.2f}")
-
-    if rsi < 30 and macd > signal and hist > 0:
+    if rsi < 30 and macd > signal_line and hist > 0:
         return "📈 STRONG BUY"
-    elif rsi > 70 and macd < signal and hist < 0:
+    elif rsi > 70 and macd < signal_line and hist < 0:
         return "📉 STRONG SELL"
     elif 45 < rsi < 55:
         return "🔁 HOLD"
@@ -113,52 +89,37 @@ def send_signal(coin, price, signal):
         f"⏱️ *Time:* {now}"
     )
     try:
-        print(f"📨 DEBUG | Sending signal for {coin}: {signal}")
         bot.send_message(CHAT_ID, msg, parse_mode="Markdown")
+        print(f"✅ {coin} | Signal Sent: {signal}")
     except Exception as e:
         print("Telegram Error:", e)
 
-# === AUTO LOOP FUNCTION ===
+# === LOOP ===
 def signal_loop():
     while True:
         try:
             for coin in COINS:
                 prices = fetch_prices(coin)
                 if len(prices) < 30:
-                    print(f"⚠️ Not enough data for {coin}, skipping.")
+                    print(f"⚠️ {coin} | Not enough data.")
                     continue
-
                 signal = get_signal(prices)
-                current_price = prices[-1]
-                send_signal(coin, current_price, signal)
-                print(f"✅ {coin} signal sent: {signal}")
+                send_signal(coin, prices[-1], signal)
         except Exception as e:
             print("⚠️ Error in loop:", e)
-
         print(f"⏳ Sleeping {LOOP_MINUTES} mins...\n")
         time.sleep(LOOP_MINUTES * 60)
 
-# === BACKGROUND THREAD FOR LOOP ===
-from flask import Flask
-import threading
-
-app = Flask(__name__)  # Make sure this is at the top
-
+# === THREADING ===
 def start_bot_loop():
-    print("🚀 DEBUG | Starting signal loop thread...")
+    print("🚀 Starting signal loop thread...")
     t = threading.Thread(target=signal_loop)
     t.daemon = True
     t.start()
 
-@app.route('/')
-def home():
-    return "✅ Crypto Signal Bot Running!"
-
-# ✅ Start signal loop directly before running Flask
-print("🚀 Triggering signal loop before Flask startup...")
+# === INIT ===
 start_bot_loop()
 
 if __name__ == "__main__":
-    print("🌐 DEBUG | Running Flask server...")
     bot.send_message(CHAT_ID, "🚀 Bot Successfully Deployed!")
     app.run(host="0.0.0.0", port=10000)
