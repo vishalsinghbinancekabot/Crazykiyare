@@ -139,12 +139,17 @@ def signal_loop():
         time.sleep(LOOP_MINUTES * 60)
 
 # === BACKGROUND THREAD FOR LOOP ===
+from flask import Flask
+import threading
+
+app = Flask(__name__)  # ✅ Yeh line zaroori hai
+
 def start_bot_loop():
     print("🚀 DEBUG | Starting signal loop thread...")
     t = threading.Thread(target=signal_loop)
     t.daemon = True
     t.start()
-    
+
 @app.route('/')
 def home():
     return "✅ Crypto Signal Bot Running!"
