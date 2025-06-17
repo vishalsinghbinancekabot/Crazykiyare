@@ -14,8 +14,11 @@ load_dotenv()
 print("✅ DEBUG | Loading environment variables...")
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+COINSTATS_API_KEY = os.getenv("COINSTATS_API_KEY")  # NEW LINE
+
 print("✅ DEBUG | TELEGRAM_BOT_TOKEN:", TOKEN)
 print("✅ DEBUG | TELEGRAM_CHAT_ID:", CHAT_ID)
+print("✅ DEBUG | COINSTATS_API_KEY:", COINSTATS_API_KEY)
 
 COINS = ["bitcoin", "ethereum", "solana", "binancecoin"]
 VS_CURRENCY = "usd"
