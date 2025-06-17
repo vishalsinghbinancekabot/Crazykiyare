@@ -52,18 +52,16 @@ def calculate_macd(prices, short=12, long=26, signal=9):
 def fetch_prices(coin):
     try:
         print(f"📡 Fetching prices for {coin}")
-        url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart"
-        params = {"vs_currency": VS_CURRENCY, "days": "7", "interval": "hourly"}
+        url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart?vs_currency=usd&days=7&interval=hourly"
+        response = requests.get(url)
 
-        response = requests.get(url, params=params)
-        data = response.json()
-
-        if "prices" not in data:
-            print(f"❌ No 'prices' in response for {coin}")
+        if response.status_code != 200:
+            print(f"❌ API Error for {coin}: {response.status_code}")
             return []
 
+        data = response.json()
         prices = [point[1] for point in data["prices"]]
-        print(f"✅ Fetched {len(prices)} prices for {coin}")
+        print(f"✅ Got {len(prices)} prices for {coin}")
         return prices
 
     except Exception as e:
