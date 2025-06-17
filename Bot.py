@@ -58,32 +58,27 @@ def calculate_macd(prices, short=12, long=26, signal=9):
     histogram = macd_line[-len(signal_line):] - signal_line
     return macd_line[-1], signal_line[-1], histogram[-1]
 
-
 def fetch_prices(coin):
     try:
         print(f"📡 DEBUG | Fetching prices for {coin}")
-        
-        url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart?vs_currency={VS_CURRENCY}&days=2&interval={INTERVAL}"
+        url = f"https://api.coinstats.app/public/v1/charts?period=7d&coinId={coin}"
         response = requests.get(url)
 
-        # ✅ DEBUG output to trace API issues
         print("📄 DEBUG | Status Code:", response.status_code)
-        print("📄 DEBUG | Response Text (First 200 chars):", response.text[:200])
+        print("📄 DEBUG | Response Text:", response.text[:200])
 
-        # ✅ Make sure API returns valid data
         if response.status_code != 200:
             print(f"❌ API Error for {coin}: {response.status_code}")
             return []
 
         data = response.json()
-        prices = [point[1] for point in data["prices"]]
-
+        prices = [point[1] for point in data["chart"]]
         print(f"✅ DEBUG | Fetched {len(prices)} prices for {coin}")
         return prices
 
     except Exception as e:
         print(f"⚠️ Error fetching {coin}:", e)
-        return [] 
+        return []
         
 def get_signal(prices):
     rsi = calculate_rsi(prices)
