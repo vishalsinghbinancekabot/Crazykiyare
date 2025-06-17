@@ -61,18 +61,23 @@ def calculate_macd(prices, short=12, long=26, signal=9):
 def fetch_prices(coin):
     try:
         print(f"📡 DEBUG | Fetching prices for {coin}")
-        url = f"https://api.coinstats.app/public/v1/charts?period=7d&coinId={coin}"
-        response = requests.get(url)
+        url = f"https://openapi.coinstats.app/v1/charts?period=7d&coinId={coin}"
 
+        headers = {
+            "accept": "application/json",
+            "X-API-KEY": os.getenv("COINSTATS_API_KEY")
+        }
+
+        response = requests.get(url, headers=headers)
         print("📄 DEBUG | Status Code:", response.status_code)
-        print("📄 DEBUG | Response Text:", response.text[:200])
+        print("📄 DEBUG | Response Text (first 200):", response.text[:200])
 
         if response.status_code != 200:
             print(f"❌ API Error for {coin}: {response.status_code}")
             return []
 
         data = response.json()
-        prices = [point[1] for point in data["chart"]]
+        prices = [point[1] for point in data["data"]["chart"]]
         print(f"✅ DEBUG | Fetched {len(prices)} prices for {coin}")
         return prices
 
